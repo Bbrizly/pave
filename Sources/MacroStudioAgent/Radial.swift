@@ -2,12 +2,20 @@
 import AppKit
 import MacroEngineKit
 
-enum Tick {
-    private static let sound = NSSound(contentsOfFile: "/System/Library/Sounds/Tink.aiff", byReference: true)
-    static func play() {
-        sound?.stop()
-        sound?.volume = 0.3
-        sound?.play()
+enum Sounds {
+    private static let tick = NSSound(contentsOfFile: "/System/Library/Sounds/Tink.aiff", byReference: true)
+    private static let pop = NSSound(contentsOfFile: "/System/Library/Sounds/Pop.aiff", byReference: true)
+
+    static func playTick() {
+        tick?.stop()
+        tick?.volume = 0.25
+        tick?.play()
+    }
+
+    static func playFire() {
+        pop?.stop()
+        pop?.volume = 0.35
+        pop?.play()
     }
 }
 
@@ -58,46 +66,88 @@ enum Toast {
     }
 }
 
-/// The wheel. CALayer wedges on a container layer, spring in, hover pop.
+/// The wheel. Prebuilt CALayer wedges with SF Symbol icons, a live center hub,
+/// staggered spring bloom, and an accent glow on the selected slice.
 final class RadialView: NSView {
     private let content = CALayer()
     private var wedges: [CAShapeLayer] = []
-    private var texts: [CATextLayer] = []
+    private var icons: [CALayer] = []
+    private var iconImages: [(normal: CGImage?, selected: CGImage?)] = []
+    private var labels: [CATextLayer] = []
+    private var hubText: CATextLayer!
     private let outerR: CGFloat = 140
-    private let innerR: CGFloat = 34
+    private let innerR: CGFloat = 36
 
     init() {
         super.init(frame: NSRect(x: 0, y: 0, width: 300, height: 300))
         wantsLayer = true
+        layer?.masksToBounds = false
+
         content.frame = bounds
         content.anchorPoint = CGPoint(x: 0.5, y: 0.5)
         content.position = CGPoint(x: 150, y: 150)
+        content.shadowColor = NSColor.black.cgColor
+        content.shadowOpacity = 0.30
+        content.shadowRadius = 16
+        content.shadowOffset = CGSize(width: 0, height: -4)
         layer?.addSublayer(content)
 
-        let hole = CAShapeLayer()
-        let holePath = CGMutablePath()
-        holePath.addEllipse(in: CGRect(x: 150 - 22, y: 150 - 22, width: 44, height: 44))
-        hole.path = holePath
-        hole.fillColor = NSColor.black.withAlphaComponent(0.3).cgColor
-        hole.zPosition = 10
-        content.addSublayer(hole)
+        let hub = CAShapeLayer()
+        let hubPath = CGMutablePath()
+        hubPath.addEllipse(in: CGRect(x: 150 - 28, y: 150 - 28, width: 56, height: 56))
+        hub.path = hubPath
+        hub.fillColor = NSColor.windowBackgroundColor.withAlphaComponent(0.97).cgColor
+        hub.strokeColor = NSColor.separatorColor.cgColor
+        hub.lineWidth = 1
+        hub.zPosition = 10
+        content.addSublayer(hub)
+
+        hubText = CATextLayer()
+        hubText.fontSize = 10
+        hubText.font = NSFont.systemFont(ofSize: 10, weight: .semibold)
+        hubText.alignmentMode = .center
+        hubText.isWrapped = true
+        hubText.truncationMode = .end
+        hubText.contentsScale = 2
+        hubText.foregroundColor = NSColor.secondaryLabelColor.cgColor
+        hubText.frame = CGRect(x: 150 - 26, y: 150 - 13, width: 52, height: 26)
+        hubText.zPosition = 11
+        content.addSublayer(hubText)
     }
 
     required init?(coder: NSCoder) { fatalError("no coder") }
 
     private var baseColor: CGColor { NSColor.windowBackgroundColor.withAlphaComponent(0.94).cgColor }
-    private var hotColor: CGColor { NSColor.controlAccentColor.withAlphaComponent(0.9).cgColor }
+    private var hotColor: CGColor { NSColor.controlAccentColor.cgColor }
 
-    func configure(names: [String]) {
+    private func symbolImage(_ name: String, color: NSColor) -> CGImage? {
+        guard let img = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
+            .withSymbolConfiguration(.init(pointSize: 15, weight: .semibold)) else { return nil }
+        let tinted = NSImage(size: img.size, flipped: false) { rect in
+            img.draw(in: rect)
+            color.set()
+            rect.fill(using: .sourceAtop)
+            return true
+        }
+        return tinted.cgImage(forProposedRect: nil, context: nil, hints: nil)
+    }
+
+    func configure(slices: [(name: String, icon: String?)]) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         wedges.forEach { $0.removeFromSuperlayer() }
-        texts.forEach { $0.removeFromSuperlayer() }
+        icons.forEach { $0.removeFromSuperlayer() }
+        labels.forEach { $0.removeFromSuperlayer() }
         wedges = []
-        texts = []
-        guard !names.isEmpty else { return }
+        icons = []
+        iconImages = []
+        labels = []
+        defer { CATransaction.commit() }
+        guard !slices.isEmpty else { return }
 
-        let per = 2 * CGFloat.pi / CGFloat(names.count)
+        let per = 2 * CGFloat.pi / CGFloat(slices.count)
         let ctr = CGPoint(x: 150, y: 150)
-        for (i, name) in names.enumerated() {
+        for (i, slice) in slices.enumerated() {
             let mid = CGFloat.pi / 2 - CGFloat(i) * per
             let a0 = mid + per / 2
             let a1 = mid - per / 2
@@ -111,60 +161,105 @@ final class RadialView: NSView {
             w.frame = bounds
             w.fillColor = baseColor
             w.strokeColor = NSColor.separatorColor.cgColor
-            w.lineWidth = 1
+            w.lineWidth = 2 // reads as a clean gap between slices
             content.addSublayer(w)
             wedges.append(w)
 
+            let iconName = slice.icon ?? "sparkles"
+            let normal = symbolImage(iconName, color: .labelColor)
+            let selected = symbolImage(iconName, color: .white)
+            iconImages.append((normal, selected))
+            let iconLayer = CALayer()
+            iconLayer.contents = normal
+            iconLayer.contentsGravity = .resizeAspect
+            iconLayer.contentsScale = 2
+            let ir: CGFloat = 104
+            iconLayer.frame = CGRect(x: 150 + cos(mid) * ir - 11, y: 150 + sin(mid) * ir - 11,
+                                     width: 22, height: 22)
+            iconLayer.zPosition = 5
+            content.addSublayer(iconLayer)
+            icons.append(iconLayer)
+
             let t = CATextLayer()
-            t.string = name
-            t.fontSize = 12
-            t.font = NSFont.systemFont(ofSize: 12, weight: .semibold)
+            t.string = slice.name
+            t.fontSize = 11
+            t.font = NSFont.systemFont(ofSize: 11, weight: .medium)
             t.alignmentMode = .center
             t.isWrapped = true
             t.truncationMode = .end
             t.contentsScale = 2
             t.foregroundColor = NSColor.labelColor.cgColor
             t.zPosition = 5
-            let lr = (innerR + outerR) / 2
-            t.frame = CGRect(x: 150 + cos(mid) * lr - 46, y: 150 + sin(mid) * lr - 14,
-                             width: 92, height: 28)
+            let lr: CGFloat = 70
+            t.frame = CGRect(x: 150 + cos(mid) * lr - 35, y: 150 + sin(mid) * lr - 13,
+                             width: 70, height: 26)
             content.addSublayer(t)
-            texts.append(t)
+            labels.append(t)
         }
-        select(nil)
+        selectInternal(nil, names: slices.map { $0.name })
     }
 
-    func select(_ index: Int?) {
+    private var currentNames: [String] = []
+
+    func select(_ index: Int?, names: [String]) {
+        currentNames = names
         CATransaction.begin()
         CATransaction.setAnimationDuration(0.08)
-        for (j, w) in wedges.enumerated() {
-            let hot = j == index
-            w.fillColor = hot ? hotColor : baseColor
-            let s: CGFloat = hot ? 1.05 : 1.0
-            w.transform = CATransform3DMakeScale(s, s, 1)
-        }
+        selectInternal(index, names: names)
         CATransaction.commit()
     }
 
+    private func selectInternal(_ index: Int?, names: [String]) {
+        currentNames = names
+        for (j, w) in wedges.enumerated() {
+            let hot = j == index
+            w.fillColor = hot ? hotColor : baseColor
+            let s: CGFloat = hot ? 1.06 : 1.0
+            w.transform = CATransform3DMakeScale(s, s, 1)
+            w.zPosition = hot ? 2 : 0
+            w.shadowColor = hotColor
+            w.shadowOpacity = hot ? 0.6 : 0
+            w.shadowRadius = 10
+            w.shadowOffset = .zero
+            if j < icons.count {
+                icons[j].contents = hot ? iconImages[j].selected : iconImages[j].normal
+                let si: CGFloat = hot ? 1.12 : 1.0
+                icons[j].transform = CATransform3DMakeScale(si, si, 1)
+            }
+            if j < labels.count {
+                labels[j].foregroundColor = hot ? NSColor.white.cgColor : NSColor.labelColor.cgColor
+            }
+        }
+        hubText.string = index.flatMap { $0 < names.count ? names[$0] : nil } ?? ""
+    }
+
+    /// Staggered spring bloom: each wedge pops in clockwise, 18ms apart.
     func animateIn() {
-        let spring = CASpringAnimation(keyPath: "transform.scale")
-        spring.fromValue = 0.7
-        spring.toValue = 1
-        spring.damping = 18
-        spring.stiffness = 300
-        spring.mass = 1
-        spring.duration = spring.settlingDuration
         let fade = CABasicAnimation(keyPath: "opacity")
         fade.fromValue = 0
         fade.toValue = 1
-        fade.duration = 0.1
-        content.add(spring, forKey: "in-scale")
+        fade.duration = 0.12
         content.add(fade, forKey: "in-fade")
+
+        let now = CACurrentMediaTime()
+        for (i, w) in wedges.enumerated() {
+            let spring = CASpringAnimation(keyPath: "transform.scale")
+            spring.fromValue = 0.55
+            spring.toValue = 1
+            spring.damping = 16
+            spring.stiffness = 380
+            spring.mass = 1
+            spring.duration = spring.settlingDuration
+            spring.beginTime = now + Double(i) * 0.018
+            spring.fillMode = .backwards
+            w.add(spring, forKey: "bloom")
+        }
     }
 }
 
 /// Owns the panel, selection state, and firing. Never activates the agent,
-/// never blocks input. Selection by pointer angle or arrow keys.
+/// never blocks input. Mouse and keys arrive via the event tap; this class
+/// only runs on main.
 final class RadialController {
     var settings = Settings()
     var rings: [String: [RingSlice]] = [:]
@@ -177,7 +272,6 @@ final class RadialController {
     private var slices: [RingSlice] = []
     private var selected: Int?
     private var center = CGPoint.zero
-    private var monitors: [Any] = []
 
     init(onFire: @escaping (UUID) -> Void) {
         self.onFire = onFire
@@ -201,58 +295,50 @@ final class RadialController {
             Toast.show("Radial: no ring configured yet. Open the editor.")
             return
         }
+        let mouse = NSEvent.mouseLocation
+        center = mouse
+        panel.setFrame(NSRect(x: mouse.x - 150, y: mouse.y - 150, width: 300, height: 300),
+                       display: false)
         present(Array(ring.prefix(8)))
+        visibleFlag.set(true)
     }
 
     private func present(_ s: [RingSlice]) {
         slices = s
         selected = nil
-        let firstShow = !visibleFlag.get()
-        if firstShow {
-            let mouse = NSEvent.mouseLocation
-            center = mouse
-            panel.setFrame(NSRect(x: mouse.x - 150, y: mouse.y - 150, width: 300, height: 300),
-                           display: false)
-        }
-        view.configure(names: s.map { $0.label })
+        view.configure(slices: s.map { ($0.label, $0.icon) })
         panel.orderFrontRegardless()
         view.animateIn()
-        guard firstShow else { return }
-        visibleFlag.set(true)
-        if let mm = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged],
-                                                      handler: { [weak self] _ in self?.trackMouse() }) {
-            monitors.append(mm)
-        }
-        if !settings.releaseToFire {
-            if let cm = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown],
-                                                          handler: { [weak self] _ in self?.fire() }) {
-                monitors.append(cm)
-            }
-        }
     }
 
-    private func trackMouse() {
+    /// Mouse moved (via event tap). Selection by angle, 24pt deadzone = cancel.
+    func updateFromMouse() {
+        guard visibleFlag.get() else { return }
         let m = NSEvent.mouseLocation
         let dx = m.x - center.x
         let dy = m.y - center.y
         var newSel: Int?
         if hypot(dx, dy) >= 24, !slices.isEmpty {
             let per = 2 * CGFloat.pi / CGFloat(slices.count)
-            var a = CGFloat.pi / 2 - atan2(dy, dx) + per / 2 // clockwise from top, snapped
+            var a = CGFloat.pi / 2 - atan2(dy, dx) + per / 2 // clockwise from top
             while a < 0 { a += 2 * .pi }
             newSel = Int(a.truncatingRemainder(dividingBy: 2 * .pi) / per) % slices.count
         }
         if newSel != selected {
             selected = newSel
-            view.select(newSel)
-            if settings.tickSound, newSel != nil { Tick.play() }
+            view.select(newSel, names: slices.map { $0.label })
+            if settings.tickSound, newSel != nil { Sounds.playTick() }
         }
     }
 
-    /// Called on the tap thread. Swallows arrows, return, escape while visible.
+    /// Called on the tap thread. Arrows, Return, Escape are the wheel's keys.
+    /// Any other key means the user is typing a shortcut: get out of the way.
     func handleKey(_ code: Int64) -> Bool {
         guard visibleFlag.get() else { return false }
-        guard [123, 124, 125, 126, 36, 53].contains(Int(code)) else { return false }
+        guard [123, 124, 125, 126, 36, 53].contains(Int(code)) else {
+            DispatchQueue.main.async { self.hide() }
+            return false
+        }
         DispatchQueue.main.async {
             switch code {
             case 123, 126: self.stepSelection(-1)
@@ -270,13 +356,20 @@ final class RadialController {
         let base = selected ?? (d > 0 ? -1 : 0)
         let next = (base + d + slices.count) % slices.count
         selected = next
-        view.select(next)
-        if settings.tickSound { Tick.play() }
+        view.select(next, names: slices.map { $0.label })
+        if settings.tickSound { Sounds.playTick() }
     }
 
     func holdReleased() {
         guard visibleFlag.get() else { return }
         if settings.releaseToFire { fire() }
+        // Click mode keeps the wheel open until a click, Return, or Escape.
+    }
+
+    /// A click always resolves the wheel, in both fire modes. This is also
+    /// how submenus stay usable after the hold key was released.
+    func clickFire() {
+        fire()
     }
 
     private func fire() {
@@ -287,18 +380,18 @@ final class RadialController {
         }
         let s = slices[i]
         if let sub = s.submenu, !sub.isEmpty {
+            if settings.tickSound { Sounds.playTick() }
             present(Array(sub.prefix(8))) // one level deep, no more
             return
         }
         hide()
+        if settings.tickSound { Sounds.playFire() }
         if let id = s.macro { onFire(id) }
     }
 
     func hide() {
         visibleFlag.set(false)
         panel.orderOut(nil)
-        monitors.forEach { NSEvent.removeMonitor($0) }
-        monitors = []
         selected = nil
     }
 }

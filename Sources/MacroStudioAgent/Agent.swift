@@ -104,6 +104,15 @@ final class AgentDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         tap.onRadialKey = { [weak self] code in
             self?.radial.handleKey(code) ?? false
         }
+        tap.radialVisible = { [weak self] in
+            self?.radial.visibleFlag.get() ?? false
+        }
+        tap.onRadialMouseMoved = { [weak self] in
+            self?.radial.updateFromMouse()
+        }
+        tap.onRadialClick = { [weak self] in
+            self?.radial.clickFire()
+        }
         tap.onHoldDown = { [weak self] in
             guard let self, self.enabledBox.get() else { return }
             let work = DispatchWorkItem { [weak self] in
@@ -137,12 +146,31 @@ final class AgentDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         for (ctx, ring) in rings {
             rings[ctx] = ring.map { slice in
                 var s = slice
-                if s.label.isEmpty, let id = s.macro, let m = byId[id] { s.label = m.name }
+                if let id = s.macro, let m = byId[id] {
+                    if s.label.isEmpty { s.label = m.name }
+                    if s.icon == nil { s.icon = Self.defaultIcon(for: m) }
+                }
+                if s.icon == nil, s.submenu != nil { s.icon = "ellipsis.circle" }
                 return s
             }
         }
         radial.rings = rings
         radial.settings = settings
+    }
+
+    /// A slice with no explicit icon borrows one from its macro's first step.
+    private static func defaultIcon(for macro: Macro) -> String {
+        switch macro.steps.first {
+        case .app: return "app.fill"
+        case .open: return "folder.fill"
+        case .text: return "text.cursor"
+        case .keys: return "keyboard.fill"
+        case .shell: return "terminal.fill"
+        case .window: return "macwindow"
+        case .system: return "gearshape.fill"
+        case .delay: return "clock.fill"
+        default: return "sparkles"
+        }
     }
 
     private func run(macro: Macro) {

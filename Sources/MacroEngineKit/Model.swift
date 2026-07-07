@@ -176,20 +176,24 @@ public struct RingSlice: Codable, Equatable {
     public var label: String
     public var macro: UUID?
     public var submenu: [RingSlice]?
+    /// SF Symbol name. Nil = agent derives one from the macro's first step.
+    public var icon: String?
 
-    public init(label: String, macro: UUID? = nil, submenu: [RingSlice]? = nil) {
+    public init(label: String, macro: UUID? = nil, submenu: [RingSlice]? = nil, icon: String? = nil) {
         self.label = label
         self.macro = macro
         self.submenu = submenu
+        self.icon = icon
     }
 
-    enum CodingKeys: String, CodingKey { case label, macro, submenu }
+    enum CodingKeys: String, CodingKey { case label, macro, submenu, icon }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         label = try c.decodeIfPresent(String.self, forKey: .label) ?? ""
         macro = try c.decodeIfPresent(UUID.self, forKey: .macro)
         submenu = try c.decodeIfPresent([RingSlice].self, forKey: .submenu)
+        icon = try c.decodeIfPresent(String.self, forKey: .icon)
     }
 }
 

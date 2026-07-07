@@ -13,13 +13,18 @@ final class Locked<T> {
 }
 
 /// One session CGEventTap. Matched hotkeys are swallowed; everything else
-/// passes untouched. The callback does lookup + dispatch + return, nothing else.
+/// passes untouched. While the radial is up, mouse moves and clicks route
+/// through here too: one reliable pipe instead of NSEvent global monitors,
+/// which macOS delivers only when it feels like it.
 final class EventTap {
     var holdKeyCode: Int64 = 54
     var onHotkey: ((Int64, UInt64) -> Bool)?      // tap thread; true = swallow
     var onRadialKey: ((Int64) -> Bool)?           // tap thread; true = swallow
     var onHoldDown: (() -> Void)?                 // main
     var onHoldUp: (() -> Void)?                   // main
+    var onRadialMouseMoved: (() -> Void)?         // main
+    var onRadialClick: (() -> Void)?              // main
+    var radialVisible: () -> Bool = { false }     // tap thread, must be cheap
 
     private(set) var started = false
     private var tap: CFMachPort?
@@ -27,10 +32,19 @@ final class EventTap {
     private var holdIsDown = false
     private var watchdog: Timer?
 
-    private var holdKeyIsModifier: Bool {
-        // left/right shift, control, option, command, fn
-        [54, 55, 56, 58, 59, 60, 61, 62, 63].contains(Int(holdKeyCode))
+    /// The modifier flag bit a hold keycode maps to, nil for normal keys.
+    private func modifierBit(for code: Int64) -> CGEventFlags? {
+        switch code {
+        case 54, 55: return .maskCommand
+        case 56, 60: return .maskShift
+        case 58, 61: return .maskAlternate
+        case 59, 62: return .maskControl
+        case 63: return .maskSecondaryFn
+        default: return nil
+        }
     }
+
+    private var holdKeyIsModifier: Bool { modifierBit(for: holdKeyCode) != nil }
 
     @discardableResult
     func start() -> Bool {
@@ -38,7 +52,9 @@ final class EventTap {
         let mask: CGEventMask =
             (1 << CGEventType.keyDown.rawValue) |
             (1 << CGEventType.keyUp.rawValue) |
-            (1 << CGEventType.flagsChanged.rawValue)
+            (1 << CGEventType.flagsChanged.rawValue) |
+            (1 << CGEventType.mouseMoved.rawValue) |
+            (1 << CGEventType.leftMouseDown.rawValue)
 
         let callback: CGEventTapCallBack = { _, type, event, refcon in
             let me = Unmanaged<EventTap>.fromOpaque(refcon!).takeUnretainedValue()
@@ -77,10 +93,15 @@ final class EventTap {
 
         case .flagsChanged:
             let code = event.getIntegerValueField(.keyboardEventKeycode)
-            if holdKeyIsModifier, code == holdKeyCode {
-                holdIsDown.toggle()
-                let down = holdIsDown
-                DispatchQueue.main.async { down ? self.onHoldDown?() : self.onHoldUp?() }
+            // Read the actual flag state instead of toggling a counter.
+            // A toggle desyncs forever after one missed event (tap restart,
+            // secure input); the flag bit is ground truth on every event.
+            if code == holdKeyCode, let bit = modifierBit(for: code) {
+                let down = event.flags.contains(bit)
+                if down != holdIsDown {
+                    holdIsDown = down
+                    DispatchQueue.main.async { down ? self.onHoldDown?() : self.onHoldUp?() }
+                }
             }
             return Unmanaged.passUnretained(event)
 
@@ -104,6 +125,19 @@ final class EventTap {
                 holdIsDown = false
                 DispatchQueue.main.async { self.onHoldUp?() }
                 return nil
+            }
+            return Unmanaged.passUnretained(event)
+
+        case .mouseMoved:
+            if radialVisible() {
+                DispatchQueue.main.async { self.onRadialMouseMoved?() }
+            }
+            return Unmanaged.passUnretained(event)
+
+        case .leftMouseDown:
+            if radialVisible() {
+                DispatchQueue.main.async { self.onRadialClick?() }
+                return nil // never click through the wheel
             }
             return Unmanaged.passUnretained(event)
 

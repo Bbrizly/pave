@@ -46,19 +46,20 @@ enum Ctl {
         #if os(macOS)
         let runner = MacRunner()
         runner.toast = { print($0) }
-        let sem = DispatchSemaphore(value: 0)
-        var exitCode: Int32 = 0
+        // Do not block main with a semaphore: several step runners hop to the
+        // main queue (app activation, window moves, dark mode) and would
+        // deadlock. dispatchMain() keeps the main queue serviced.
         Executor().run(macro, with: runner) { result in
+            var exitCode: Int32 = 0
             if case .failure(let err) = result {
                 FileHandle.standardError.write(Data("error: \(err.description)\n".utf8))
                 exitCode = 1
             } else {
                 print("ok: \(macro.name)")
             }
-            sem.signal()
+            DispatchQueue.main.async { exit(exitCode) }
         }
-        sem.wait()
-        exit(exitCode)
+        dispatchMain()
         #else
         fail("run is macOS only")
         #endif

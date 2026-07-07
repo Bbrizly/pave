@@ -81,6 +81,11 @@ public final class Store {
     /// Called by both agent and editor so it works whichever launches first.
     @discardableResult
     public func installStartersIfEmpty() -> Bool {
+        // Marker beats a data check: agent and editor both call this at launch,
+        // and existing stores must never get a second batch of starters.
+        let marker = root.appendingPathComponent(".initialized")
+        guard !FileManager.default.fileExists(atPath: marker.path) else { return false }
+        FileManager.default.createFile(atPath: marker.path, contents: Data())
         guard loadMacros().isEmpty, loadRings().isEmpty else { return false }
         let starters = [
             Macro(name: "Open Downloads", steps: [.open(target: "~/Downloads")]),
