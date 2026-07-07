@@ -16,7 +16,17 @@ enum AgentApp {
     }
 }
 
-final class AgentDelegate: NSObject, NSApplicationDelegate {
+final class AgentDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+
+    /// Self-heal: every menu open retries the tap, so granting Accessibility
+    /// then clicking the icon is enough. No relaunch, no reload hunting.
+    func menuWillOpen(_ menu: NSMenu) {
+        if !tap.started, tap.start() {
+            Toast.show("Macro Studio is live. Hold the radial key.")
+        }
+        updateTapStatus()
+    }
+
     private let store = Store()
     private let executor = Executor()
     private let runner = MacRunner()
@@ -36,6 +46,7 @@ final class AgentDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         runner.toast = { Toast.show($0) }
+        store.installStartersIfEmpty()
 
         radial = RadialController(onFire: { [weak self] id in
             guard let self, let m = self.macros.first(where: { $0.id == id }) else { return }
@@ -55,11 +66,9 @@ final class AgentDelegate: NSObject, NSApplicationDelegate {
         reload()
 
         let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-        let trusted = AXIsProcessTrustedWithOptions(opts)
+        _ = AXIsProcessTrustedWithOptions(opts)
         if !tap.start() {
-            Toast.show(trusted
-                ? "Macro Studio: event tap failed to start"
-                : "Grant Accessibility to MacroStudioAgent, then choose Reload from the menu bar icon")
+            Toast.show("Macro Studio is blocked. Grant Accessibility to MacroStudioAgent (menu bar icon has a shortcut), then reopen the menu.")
         }
 
         watchers = [
@@ -152,17 +161,34 @@ final class AgentDelegate: NSObject, NSApplicationDelegate {
 
     private var enabledItem: NSMenuItem!
     private var loginItem: NSMenuItem!
+    private var tapStatusItem: NSMenuItem!
+    private var permsItem: NSMenuItem!
 
     private func buildMenu() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        statusItem.button?.image = NSImage(
-            systemSymbolName: "circle.grid.cross", accessibilityDescription: "Macro Studio")
 
         let menu = NSMenu()
+        menu.delegate = self
+
+        tapStatusItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        tapStatusItem.isEnabled = false
+        menu.addItem(tapStatusItem)
+
+        permsItem = NSMenuItem(title: "Open Accessibility Settings",
+                               action: #selector(openAccessibility), keyEquivalent: "")
+        permsItem.target = self
+        menu.addItem(permsItem)
+
+        menu.addItem(.separator())
+
         enabledItem = NSMenuItem(title: "Enabled", action: #selector(toggleEnabled), keyEquivalent: "")
         enabledItem.target = self
         enabledItem.state = .on
         menu.addItem(enabledItem)
+
+        let showRadial = NSMenuItem(title: "Show Radial", action: #selector(showRadialClicked), keyEquivalent: "")
+        showRadial.target = self
+        menu.addItem(showRadial)
 
         let editor = NSMenuItem(title: "Open Editor", action: #selector(openEditor), keyEquivalent: "")
         editor.target = self
@@ -180,6 +206,28 @@ final class AgentDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         statusItem.menu = menu
+        updateTapStatus()
+    }
+
+    private func updateTapStatus() {
+        let ok = tap.started
+        tapStatusItem.title = ok
+            ? "Engine running (\(macros.count) macros). Hold the radial key."
+            : "BLOCKED: grant Accessibility to MacroStudioAgent"
+        permsItem.isHidden = ok
+        statusItem.button?.image = NSImage(
+            systemSymbolName: ok ? "circle.grid.cross" : "exclamationmark.triangle",
+            accessibilityDescription: "Macro Studio")
+    }
+
+    @objc private func showRadialClicked() {
+        radial.show(forApp: nil)
+    }
+
+    @objc private func openAccessibility() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+            NSWorkspace.shared.open(url)
+        }
     }
 
     @objc private func toggleEnabled() {

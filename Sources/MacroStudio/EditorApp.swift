@@ -183,15 +183,15 @@ struct SettingsPaneView: View {
                 Toggle("Tick sound", isOn: $model.settings.tickSound)
             }
             Section {
-                Button("Save settings") { model.saveSettings() }
                 Button("Launch agent") { model.launchAgent() }
-                Text("Start-at-login lives in the agent's menu bar icon.")
+                Text("Settings save automatically. Start-at-login lives in the agent's menu bar icon.")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
         }
         .formStyle(.grouped)
         .padding()
+        .onChange(of: model.settings) { _ in model.saveSettings() }
     }
 }
 #else

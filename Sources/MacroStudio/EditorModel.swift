@@ -103,20 +103,7 @@ final class EditorModel: ObservableObject {
     // MARK: starters (first run only: value inside 60 seconds)
 
     private func installStartersIfFirstRun() {
-        guard macros.isEmpty, rings.isEmpty else { return }
-        let starters = [
-            Macro(name: "Open Downloads", steps: [.open(target: "~/Downloads")]),
-            Macro(name: "Open Safari", steps: [.app(bundleId: "com.apple.Safari")]),
-            Macro(name: "Left half", hotkey: Hotkey(key: "left", mods: ["cmd", "opt"]),
-                  steps: [.window(.leftHalf)]),
-            Macro(name: "Right half", hotkey: Hotkey(key: "right", mods: ["cmd", "opt"]),
-                  steps: [.window(.rightHalf)]),
-            Macro(name: "Dark mode", steps: [.system(.darkModeToggle)]),
-        ]
-        for m in starters { try? store.save(m) }
-        let ring = starters.map { RingSlice(label: $0.name, macro: $0.id) }
-        try? store.saveRings(["global": ring])
-        load()
+        if store.installStartersIfEmpty() { load() }
     }
 
     // MARK: import / export

@@ -75,6 +75,27 @@ public final class Store {
         try Store.encoder().encode(s).write(to: settingsURL, options: .atomic)
     }
 
+    // MARK: Starters (first run: value inside 60 seconds)
+
+    /// Installs 5 starter macros and a global ring if the store is empty.
+    /// Called by both agent and editor so it works whichever launches first.
+    @discardableResult
+    public func installStartersIfEmpty() -> Bool {
+        guard loadMacros().isEmpty, loadRings().isEmpty else { return false }
+        let starters = [
+            Macro(name: "Open Downloads", steps: [.open(target: "~/Downloads")]),
+            Macro(name: "Open Safari", steps: [.app(bundleId: "com.apple.Safari")]),
+            Macro(name: "Left half", hotkey: Hotkey(key: "left", mods: ["cmd", "opt"]),
+                  steps: [.window(.leftHalf)]),
+            Macro(name: "Right half", hotkey: Hotkey(key: "right", mods: ["cmd", "opt"]),
+                  steps: [.window(.rightHalf)]),
+            Macro(name: "Dark mode", steps: [.system(.darkModeToggle)]),
+        ]
+        for m in starters { try? save(m) }
+        try? saveRings(["global": starters.map { RingSlice(label: $0.name, macro: $0.id) }])
+        return true
+    }
+
     // MARK: Import / export (.macrostudio = one JSON document)
 
     struct ExportDoc: Codable {
