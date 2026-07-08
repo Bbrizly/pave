@@ -3,7 +3,7 @@ import AppKit
 import ApplicationServices
 import Foundation
 import IOKit.hid
-import MacroEngineKit
+import PaveKit
 import UniformTypeIdentifiers
 
 final class EditorModel: ObservableObject {

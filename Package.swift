@@ -2,19 +2,19 @@
 import PackageDescription
 
 let package = Package(
-    name: "MacroStudio",
+    name: "Pave",
     platforms: [.macOS(.v13)],
     products: [
-        .library(name: "MacroEngineKit", targets: ["MacroEngineKit"]),
-        .executable(name: "macroctl", targets: ["macroctl"]),
-        .executable(name: "MacroStudioAgent", targets: ["MacroStudioAgent"]),
-        .executable(name: "MacroStudio", targets: ["MacroStudio"]),
+        .library(name: "PaveKit", targets: ["PaveKit"]),
+        .executable(name: "pavectl", targets: ["pavectl"]),
+        .executable(name: "PaveAgent", targets: ["PaveAgent"]),
+        .executable(name: "Pave", targets: ["Pave"]),
     ],
     targets: [
-        .target(name: "MacroEngineKit"),
-        .executableTarget(name: "macroctl", dependencies: ["MacroEngineKit"]),
-        .executableTarget(name: "MacroStudioAgent", dependencies: ["MacroEngineKit"]),
-        .executableTarget(name: "MacroStudio", dependencies: ["MacroEngineKit"]),
-        .testTarget(name: "MacroEngineKitTests", dependencies: ["MacroEngineKit"]),
+        .target(name: "PaveKit"),
+        .executableTarget(name: "pavectl", dependencies: ["PaveKit"]),
+        .executableTarget(name: "PaveAgent", dependencies: ["PaveKit"]),
+        .executableTarget(name: "Pave", dependencies: ["PaveKit"]),
+        .testTarget(name: "PaveKitTests", dependencies: ["PaveKit"]),
     ]
 )

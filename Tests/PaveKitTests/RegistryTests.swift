@@ -1,5 +1,5 @@
 import XCTest
-@testable import MacroEngineKit
+@testable import PaveKit
 
 final class RegistryTests: XCTestCase {
     private let cmdShift = ModMask.command | ModMask.shift

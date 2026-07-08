@@ -1,5 +1,5 @@
 #if os(macOS)
-import MacroEngineKit
+import PaveKit
 import SwiftUI
 
 @main

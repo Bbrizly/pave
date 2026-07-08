@@ -1,7 +1,7 @@
 #if os(macOS)
 import AppKit
 import Foundation
-import MacroEngineKit
+import PaveKit
 
 /// Tiny thread-safe box for values shared between the tap thread and main.
 final class Locked<T> {

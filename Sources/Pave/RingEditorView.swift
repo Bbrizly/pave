@@ -1,5 +1,5 @@
 #if os(macOS)
-import MacroEngineKit
+import PaveKit
 import SwiftUI
 
 /// Assign macros to the 8 slices of a ring, per app context, with a live preview.

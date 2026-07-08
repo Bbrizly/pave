@@ -1,6 +1,6 @@
 #if os(macOS)
 import AppKit
-import MacroEngineKit
+import PaveKit
 
 enum Sounds {
     private static let tick = NSSound(contentsOfFile: "/System/Library/Sounds/Tink.aiff", byReference: true)
