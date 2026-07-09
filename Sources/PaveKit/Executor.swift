@@ -27,7 +27,7 @@ public protocol StepRunner {
 /// One serial executor. A running macro blocks new fires.
 /// Hard cap checked between steps; shell steps carry their own timeout.
 public final class Executor {
-    private let queue = DispatchQueue(label: "com.bbrizly.macrostudio.executor")
+    private let queue = DispatchQueue(label: "com.bbrizly.pave.executor")
     private let lock = NSLock()
     private var running = false
     public var maxRuntime: TimeInterval = 30

@@ -74,14 +74,21 @@ final class EditorModel: ObservableObject {
 
     func pokeAgent() {
         DistributedNotificationCenter.default().postNotificationName(
-            NSNotification.Name("com.bbrizly.macrostudio.reload"),
+            NSNotification.Name("com.bbrizly.pave.reload"),
             object: nil, userInfo: nil, deliverImmediately: true)
     }
 
     func testRun(_ id: UUID) {
         DistributedNotificationCenter.default().postNotificationName(
-            NSNotification.Name("com.bbrizly.macrostudio.run"),
+            NSNotification.Name("com.bbrizly.pave.run"),
             object: id.uuidString, userInfo: nil, deliverImmediately: true)
+    }
+
+    /// Asks the agent to play the working menu-bar animation so the user can see it.
+    func testIcon() {
+        DistributedNotificationCenter.default().postNotificationName(
+            NSNotification.Name("com.bbrizly.pave.icontest"),
+            object: nil, userInfo: nil, deliverImmediately: true)
     }
 
     func refreshPermissions() {
@@ -90,8 +97,8 @@ final class EditorModel: ObservableObject {
     }
 
     func launchAgent() {
-        let sibling = (Bundle.main.bundlePath as NSString).deletingLastPathComponent + "/MacroStudioAgent.app"
-        for path in ["/Applications/MacroStudioAgent.app", sibling]
+        let sibling = (Bundle.main.bundlePath as NSString).deletingLastPathComponent + "/PaveAgent.app"
+        for path in ["/Applications/PaveAgent.app", sibling]
         where FileManager.default.fileExists(atPath: path) {
             NSWorkspace.shared.openApplication(
                 at: URL(fileURLWithPath: path), configuration: NSWorkspace.OpenConfiguration())
@@ -110,7 +117,7 @@ final class EditorModel: ObservableObject {
 
     func importPanel() {
         let p = NSOpenPanel()
-        p.allowedContentTypes = [UTType(filenameExtension: "macrostudio") ?? .json]
+        p.allowedContentTypes = [UTType(filenameExtension: "pave") ?? .json]
         guard p.runModal() == .OK, let url = p.url else { return }
         do {
             let result = try store.importFile(at: url)
@@ -132,8 +139,8 @@ final class EditorModel: ObservableObject {
 
     func exportPanel() {
         let p = NSSavePanel()
-        p.allowedContentTypes = [UTType(filenameExtension: "macrostudio") ?? .json]
-        p.nameFieldStringValue = "macros.macrostudio"
+        p.allowedContentTypes = [UTType(filenameExtension: "pave") ?? .json]
+        p.nameFieldStringValue = "macros.pave"
         guard p.runModal() == .OK, let url = p.url else { return }
         do {
             try store.exportAll(to: url)
@@ -144,7 +151,7 @@ final class EditorModel: ObservableObject {
 
     func alert(_ text: String) {
         let a = NSAlert()
-        a.messageText = "Macro Studio"
+        a.messageText = "Pave"
         a.informativeText = text
         a.runModal()
     }

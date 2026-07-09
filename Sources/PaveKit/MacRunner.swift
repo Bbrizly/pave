@@ -7,7 +7,7 @@ import Foundation
 /// Runs steps on the real machine. Called on the executor's background queue;
 /// hops to main only where AppKit demands it.
 public final class MacRunner: StepRunner {
-    /// Agent injects its toast UI. macroctl injects print.
+    /// Agent injects its toast UI. pavectl injects print.
     public var toast: ((String) -> Void)?
 
     public init() {}
@@ -22,6 +22,10 @@ public final class MacRunner: StepRunner {
         case .window(let action): try runWindow(action)
         case .system(let action): try runSystem(action)
         case .delay(let ms): Thread.sleep(forTimeInterval: Double(ms) / 1000)
+        case .moveFile(let matcher, let destination, let overwrite):
+            try FileOps.runMove(matcher, destination: destination, overwrite: overwrite)
+        case .renameFile(let matcher, let nameTemplate):
+            try FileOps.runRename(matcher, nameTemplate: nameTemplate)
         case .unknown(let t): throw RunError("unknown step type '\(t)'")
         }
     }

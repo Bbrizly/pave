@@ -79,7 +79,7 @@ final class EventTap {
             guard let self, let t = self.tap else { return }
             if !CGEvent.tapIsEnabled(tap: t) {
                 CGEvent.tapEnable(tap: t, enable: true)
-                NSLog("MacroStudio: event tap re-enabled by watchdog")
+                NSLog("Pave: event tap re-enabled by watchdog")
             }
         }
         return true

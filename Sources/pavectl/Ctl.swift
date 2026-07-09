@@ -23,21 +23,21 @@ enum Ctl {
 
         case "run":
             guard let key = args.dropFirst().first else {
-                fail("usage: macroctl run <uuid-or-name>")
+                fail("usage: pavectl run <uuid-or-name>")
             }
             let macros = store.loadMacros()
             let target = macros.first { $0.id.uuidString.lowercased() == key.lowercased() }
                 ?? macros.first { $0.name.lowercased() == key.lowercased() }
             guard let macro = target else {
-                fail("no macro matching '\(key)'. Try: macroctl list")
+                fail("no macro matching '\(key)'. Try: pavectl list")
             }
             run(macro)
 
         default:
             print("""
-            macroctl: run Macro Studio macros from the terminal
-              macroctl list
-              macroctl run <uuid-or-name>
+            pavectl: run Pave macros from the terminal
+              pavectl list
+              pavectl run <uuid-or-name>
             """)
         }
     }

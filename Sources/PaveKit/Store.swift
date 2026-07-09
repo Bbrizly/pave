@@ -14,7 +14,14 @@ public final class Store {
             self.root = root
         } else {
             let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            self.root = base.appendingPathComponent("Macro Studio")
+            let newRoot = base.appendingPathComponent("Pave")
+            // One-time migration from the pre-rename data dir ("Macro Studio").
+            let oldRoot = base.appendingPathComponent("Macro Studio")
+            let fm = FileManager.default
+            if !fm.fileExists(atPath: newRoot.path), fm.fileExists(atPath: oldRoot.path) {
+                try? fm.moveItem(at: oldRoot, to: newRoot)
+            }
+            self.root = newRoot
         }
         try? FileManager.default.createDirectory(at: macrosDir, withIntermediateDirectories: true)
     }
@@ -101,7 +108,7 @@ public final class Store {
         return true
     }
 
-    // MARK: Import / export (.macrostudio = one JSON document)
+    // MARK: Import / export (.pave = one JSON document)
 
     struct ExportDoc: Codable {
         var macros: [Macro]

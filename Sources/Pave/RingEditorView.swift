@@ -23,7 +23,7 @@ struct RingEditorView: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 24) {
+        HStack(alignment: .top, spacing: 28) {
             Form {
                 Section("Ring") {
                     Picker("App context", selection: $context) {
@@ -60,11 +60,19 @@ struct RingEditorView: View {
             .formStyle(.grouped)
             .frame(maxWidth: 420)
 
-            preview
-                .frame(width: 320, height: 320)
-                .padding(.top, 20)
+            VStack(spacing: 14) {
+                Text("Live preview")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.secondary)
+                    .textCase(.uppercase)
+                    .kerning(0.5)
+                preview
+                    .frame(width: 300, height: 300)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 8)
         }
-        .padding()
+        .padding(24)
         .onAppear { loadIfNeeded() }
         .onChange(of: context) { _ in load() }
     }
@@ -76,37 +84,51 @@ struct RingEditorView: View {
     }
 
     private var preview: some View {
-        Canvas { ctx, size in
-            let names = filledNames
-            guard !names.isEmpty else {
-                let t = Text("Empty ring").foregroundColor(.secondary)
-                ctx.draw(t, at: CGPoint(x: size.width / 2, y: size.height / 2))
-                return
+        ZStack {
+            Circle()
+                .fill(Color.black.opacity(0.82))
+                .overlay(Circle().strokeBorder(Color.white.opacity(0.10), lineWidth: 1))
+                .shadow(color: .black.opacity(0.35), radius: 22, y: 8)
+                .padding(6)
+
+            Canvas { ctx, size in
+                let names = filledNames
+                let c = CGPoint(x: size.width / 2, y: size.height / 2)
+                guard !names.isEmpty else {
+                    ctx.draw(Text("Empty ring")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.white.opacity(0.4)), at: c)
+                    return
+                }
+                let outer = min(size.width, size.height) / 2 - 22
+                let inner: CGFloat = 42
+                let per = 2 * CGFloat.pi / CGFloat(names.count)
+                let gap = 0.014
+                for (i, name) in names.enumerated() {
+                    // Canvas y is down, so top = -pi/2 and clockwise = increasing angle.
+                    let mid = -CGFloat.pi / 2 + CGFloat(i) * per
+                    let a0 = mid - per / 2 + gap
+                    let a1 = mid + per / 2 - gap
+                    var p = Path()
+                    p.addArc(center: c, radius: outer,
+                             startAngle: .radians(a0), endAngle: .radians(a1), clockwise: false)
+                    p.addArc(center: c, radius: inner,
+                             startAngle: .radians(a1), endAngle: .radians(a0), clockwise: true)
+                    p.closeSubpath()
+                    ctx.fill(p, with: .color(.white.opacity(0.07)))
+                    ctx.stroke(p, with: .color(.white.opacity(0.08)), lineWidth: 1)
+                    let lr = (inner + outer) / 2
+                    let at = CGPoint(x: c.x + cos(mid) * lr, y: c.y + sin(mid) * lr)
+                    ctx.draw(Text(name)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.9)), at: at)
+                }
+                var hub = Path()
+                hub.addEllipse(in: CGRect(x: c.x - 28, y: c.y - 28, width: 56, height: 56))
+                ctx.fill(hub, with: .color(.black.opacity(0.35)))
+                ctx.stroke(hub, with: .color(.white.opacity(0.10)), lineWidth: 1)
             }
-            let c = CGPoint(x: size.width / 2, y: size.height / 2)
-            let outer = min(size.width, size.height) / 2 - 8
-            let inner: CGFloat = 34
-            let per = 2 * CGFloat.pi / CGFloat(names.count)
-            for (i, name) in names.enumerated() {
-                // Canvas y is down, so top = -pi/2 and clockwise = increasing angle.
-                let mid = -CGFloat.pi / 2 + CGFloat(i) * per
-                let a0 = mid - per / 2
-                let a1 = mid + per / 2
-                var p = Path()
-                p.addArc(center: c, radius: outer,
-                         startAngle: .radians(a0), endAngle: .radians(a1), clockwise: false)
-                p.addArc(center: c, radius: inner,
-                         startAngle: .radians(a1), endAngle: .radians(a0), clockwise: true)
-                p.closeSubpath()
-                ctx.fill(p, with: .color(Color(nsColor: .windowBackgroundColor)))
-                ctx.stroke(p, with: .color(Color(nsColor: .separatorColor)), lineWidth: 1)
-                let lr = (inner + outer) / 2
-                let at = CGPoint(x: c.x + cos(mid) * lr, y: c.y + sin(mid) * lr)
-                ctx.draw(Text(name).font(.system(size: 11, weight: .semibold)), at: at)
-            }
-            var hole = Path()
-            hole.addEllipse(in: CGRect(x: c.x - 20, y: c.y - 20, width: 40, height: 40))
-            ctx.fill(hole, with: .color(.black.opacity(0.25)))
+            .padding(6)
         }
     }
 

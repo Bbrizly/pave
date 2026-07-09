@@ -3,7 +3,7 @@ import PaveKit
 import SwiftUI
 
 enum StepType: String, CaseIterable, Identifiable {
-    case app, open, text, keys, shell, window, system, delay
+    case app, open, text, keys, shell, window, system, delay, moveFile, renameFile
     var id: String { rawValue }
     var label: String {
         switch self {
@@ -15,8 +15,26 @@ enum StepType: String, CaseIterable, Identifiable {
         case .window: return "Window"
         case .system: return "System"
         case .delay: return "Delay"
+        case .moveFile: return "Move file"
+        case .renameFile: return "Rename file"
         }
     }
+}
+
+/// The event kinds worth anchoring a macro to, plus "Off" for no anchor.
+/// Raw values match PaveEventKind so the picker maps straight to AnchorSpec.kind.
+enum AnchorKind: String, CaseIterable, Identifiable {
+    case off, fileCreated, fileMoved, appActivated
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .off: return "Off"
+        case .fileCreated: return "A file is created"
+        case .fileMoved: return "A file is moved"
+        case .appActivated: return "An app comes to front"
+        }
+    }
+    var usesBundle: Bool { self == .appActivated }
 }
 
 struct StepDraft: Identifiable {
@@ -34,6 +52,11 @@ struct StepDraft: Identifiable {
     var windowAction: WindowAction = .leftHalf
     var systemAction: SystemAction = .darkModeToggle
     var ms = "250"
+    var folder = ""
+    var ext = ""
+    var destination = ""
+    var overwrite = false
+    var nameTemplate = ""
 
     init(type: StepType) { self.type = type }
 
@@ -48,8 +71,17 @@ struct StepDraft: Identifiable {
         case .window(let a): type = .window; windowAction = a
         case .system(let a): type = .system; systemAction = a
         case .delay(let v): type = .delay; ms = String(v)
+        case .moveFile(let m, let dest, let over):
+            type = .moveFile; folder = m.folder; ext = m.ext ?? ""
+            destination = dest; overwrite = over
+        case .renameFile(let m, let tmpl):
+            type = .renameFile; folder = m.folder; ext = m.ext ?? ""; nameTemplate = tmpl
         case .unknown: return nil
         }
+    }
+
+    private var matcher: FileMatcher {
+        FileMatcher(folder: folder, ext: ext.isEmpty ? nil : ext)
     }
 
     func toStep() -> Step? {
@@ -67,6 +99,12 @@ struct StepDraft: Identifiable {
         case .delay:
             guard let v = Int(ms), v >= 0 else { return nil }
             return .delay(ms: v)
+        case .moveFile:
+            guard !folder.isEmpty, !destination.isEmpty else { return nil }
+            return .moveFile(matcher: matcher, destination: destination, overwrite: overwrite)
+        case .renameFile:
+            guard !folder.isEmpty, !nameTemplate.isEmpty else { return nil }
+            return .renameFile(matcher: matcher, nameTemplate: nameTemplate)
         }
     }
 }
@@ -82,6 +120,10 @@ struct MacroEditorView: View {
     @State private var key = ""
     @State private var mods: Set<String> = []
     @State private var steps: [StepDraft] = []
+    @State private var anchorKind: AnchorKind = .off
+    @State private var anchorFolder = ""
+    @State private var anchorExt = ""
+    @State private var anchorBundle = ""
     @State private var error: String?
     @State private var loaded = false
 
@@ -127,6 +169,22 @@ struct MacroEditorView: View {
                     }
                 }
             }
+            Section("Remind me when") {
+                Picker("Trigger", selection: $anchorKind) {
+                    ForEach(AnchorKind.allCases) { k in Text(k.label).tag(k) }
+                }
+                if anchorKind.usesBundle {
+                    TextField("App bundle id (com.apple.Safari)", text: $anchorBundle)
+                } else if anchorKind != .off {
+                    TextField("Folder (~/Downloads)", text: $anchorFolder)
+                    TextField("Extension, empty = any (pdf)", text: $anchorExt)
+                        .frame(width: 200)
+                }
+                if let s = anchorSuggestion {
+                    Button("Suggest: remind when \(s.label)") { applySuggestion(s) }
+                        .buttonStyle(.link)
+                }
+            }
             Section("Steps") {
                 ForEach($steps) { $step in
                     StepRow(step: $step,
@@ -169,6 +227,25 @@ struct MacroEditorView: View {
         .toggleStyle(.button)
     }
 
+    /// A one-click anchor guess from the first step. Only offered when no anchor
+    /// is set and the first step is an app launch.
+    private var anchorSuggestion: (label: String, kind: AnchorKind, folder: String, bundle: String)? {
+        guard anchorKind == .off, let first = steps.first else { return nil }
+        switch first.type {
+        case .app where !first.bundleId.isEmpty:
+            return ("\(first.bundleId) comes to front", .appActivated, "", first.bundleId)
+        default:
+            return nil
+        }
+    }
+
+    private func applySuggestion(_ s: (label: String, kind: AnchorKind, folder: String, bundle: String)) {
+        anchorKind = s.kind
+        anchorFolder = s.folder
+        anchorBundle = s.bundle
+        anchorExt = ""
+    }
+
     private func move(_ id: UUID, by delta: Int) {
         guard let i = steps.firstIndex(where: { $0.id == id }) else { return }
         let j = i + delta
@@ -184,6 +261,12 @@ struct MacroEditorView: View {
         key = macro.hotkey?.key ?? ""
         mods = Set(macro.hotkey?.mods ?? [])
         steps = macro.steps.compactMap { StepDraft(step: $0) }
+        if let a = macro.anchor, let k = AnchorKind(rawValue: a.kind), k != .off {
+            anchorKind = k
+            anchorFolder = a.folder ?? ""
+            anchorExt = a.fileExtension ?? ""
+            anchorBundle = a.bundleID ?? ""
+        }
     }
 
     private func save() {
@@ -202,8 +285,23 @@ struct MacroEditorView: View {
         m.enabled = enabled
         m.hotkey = hasHotkey ? Hotkey(key: key, mods: Array(mods)) : nil
         m.steps = converted
+        m.anchor = buildAnchor()
         model.save(m)
         error = nil
+    }
+
+    private func buildAnchor() -> AnchorSpec? {
+        switch anchorKind {
+        case .off:
+            return nil
+        case .appActivated:
+            return AnchorSpec(kind: anchorKind.rawValue,
+                              bundleID: anchorBundle.isEmpty ? nil : anchorBundle)
+        default:
+            return AnchorSpec(kind: anchorKind.rawValue,
+                              folder: anchorFolder.isEmpty ? nil : anchorFolder,
+                              fileExtension: anchorExt.isEmpty ? nil : anchorExt)
+        }
     }
 }
 
@@ -271,6 +369,15 @@ struct StepRow: View {
             }
         case .delay:
             TextField("Milliseconds", text: $step.ms).frame(width: 120)
+        case .moveFile:
+            TextField("Folder (~/Downloads)", text: $step.folder)
+            TextField("Extension, empty = any (pdf)", text: $step.ext).frame(width: 200)
+            TextField("Destination (~/Finance)", text: $step.destination)
+            Toggle("Overwrite if it exists", isOn: $step.overwrite)
+        case .renameFile:
+            TextField("Folder (~/Downloads)", text: $step.folder)
+            TextField("Extension, empty = any (pdf)", text: $step.ext).frame(width: 200)
+            TextField("Name template ({name}-{date}.{ext})", text: $step.nameTemplate)
         }
     }
 }
