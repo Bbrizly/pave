@@ -3,3 +3,7 @@ dist/
 .DS_Store
 *.xcodeproj
 .swiftpm/
+
+# local planning notes, kept off the public repo
+CLAUDE.md
+Docs/PAVE_SPEC.md
