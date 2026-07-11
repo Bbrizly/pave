@@ -178,7 +178,8 @@ What the ledger powers:
 The Activity pane in the editor shows everything recorded, everything
 repeated, a pause switch, and a delete-history button that removes all of it.
 Filenames in watched folders are kept locally as evidence for templates;
-everything else stays hashed. Nothing ever leaves your Mac.
+everything else stays hashed. The ledger prunes itself after 30 days, and you
+can turn filename storage off in the config. Nothing ever leaves your Mac.
 
 ## Import and Export
 
