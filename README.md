@@ -1,8 +1,15 @@
 # Pave
 
-Pave is a native macOS automation app. It lets you build macros as
-ordered steps, bind them to global or app-specific hotkeys, and launch them
-from a radial wheel that appears under the cursor.
+Pave is a native macOS automation app that learns your routines.
+
+You walk the same path three times, Pave offers to pave it. It watches app
+switches and file activity in folders you choose (metadata only, fully local,
+never keystrokes or file contents), notices sequences you repeat, and offers
+to finish them for you mid-routine. Build macros as ordered steps, bind them
+to hotkeys, fire them from a radial wheel under your cursor, or let Pave
+notice them for you.
+
+<!-- demo GIF goes here: ritual done 3 times, hand raises, offer appears -->
 
 The project is a Swift Package with one shared engine and three executables:
 
@@ -108,6 +115,10 @@ Supported step types:
 - `window`: move the focused window to halves, thirds, maximize, or next display.
 - `system`: volume, mute, brightness, mic mute, dark mode, or screen recording UI.
 - `delay`: sleep for a number of milliseconds.
+- `moveFile`: move the newest matching file from one folder to another. Fails
+  instead of overwriting unless told otherwise. Never deletes anything.
+- `renameFile`: rename the newest matching file using a template with tokens
+  like `{date}`, `{month}`, `{n}`, and `{name}`. Same no-clobber rule.
 
 Unknown step types are preserved as `unknown`, not dropped. The editor opens
 those macros read-only, the registry skips them, and the executor refuses to run
@@ -142,6 +153,33 @@ pavectl run <uuid-or-name>
 `pavectl list` prints each saved macro with its id, hotkey, context, and flags.
 `pavectl run` executes by exact UUID or exact case-insensitive name.
 
+## The Learning Layer
+
+The agent keeps a local event ledger: app activations and file operations in
+watched folders (Desktop, Documents, Downloads by default). Events are
+metadata only. No keystrokes, no clicks, no screen, no file contents, ever.
+The APIs Pave subscribes to do not carry them.
+
+What the ledger powers:
+
+- Offers. Repeat a routine three times and Pave matches it live: the menu bar
+  hand raises and a quiet panel offers to finish it. Accepting saves a
+  disabled draft macro you review in the editor. Nothing runs by itself.
+- Recall. Give any macro an anchor ("a PDF lands in Downloads") and Pave
+  reminds you it exists when that event fires. It reminds, it never runs.
+- Watch This. Record a routine once from the menu bar and get an editable
+  draft macro. No repetition needed.
+- Rename templates. When your renames follow a pattern (dates, counters),
+  Pave infers the template. Below 90 percent confidence it refuses to guess.
+- Auto-run, strictly opt-in. A path graduates only after five confirmed
+  manual runs, per-path approval, and a global switch that ships off. Only
+  file-safe steps qualify. Shell, keystroke, and system steps never auto-run.
+
+The Activity pane in the editor shows everything recorded, everything
+repeated, a pause switch, and a delete-history button that removes all of it.
+Filenames in watched folders are kept locally as evidence for templates;
+everything else stays hashed. Nothing ever leaves your Mac.
+
 ## Import and Export
 
 The editor imports and exports `.pave` files.
@@ -170,6 +208,9 @@ Tests cover:
 - Hotkey registry lookup and conflict detection.
 - Executor ordering, failures, busy rejection, and timeout behavior.
 
-## Not In v1
+## Not Here, On Purpose
 
-Recorder, variables, loops, image matching, sync, Windows support, and AI.
+Loops and branching, image matching, click-coordinate replay, sync, Windows
+support, cloud anything, and language models. Detection is counting, not AI:
+repeated event sequences and a prefix table. That is why it runs in
+microseconds and why you can read exactly what it will do before it does it.
