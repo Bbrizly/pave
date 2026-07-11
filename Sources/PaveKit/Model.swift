@@ -259,7 +259,9 @@ public enum FileOps {
 
     /// Rename the matched file in place using the template. Fails cleanly on no
     /// match, or on a name collision when {n} was not part of the template.
-    public static func runRename(_ matcher: FileMatcher, nameTemplate: String) throws {
+    /// `now` feeds {date}/{month}; it is injectable so tests are deterministic.
+    public static func runRename(_ matcher: FileMatcher, nameTemplate: String,
+                                 now: Date = Date()) throws {
         guard let src = resolveNewest(matcher) else {
             throw RunError("renameFile: no \(matchLabel(matcher)) in \(matcher.folder)")
         }
@@ -267,7 +269,7 @@ public enum FileOps {
         let dir = src.deletingLastPathComponent()
         let stem = src.deletingPathExtension().lastPathComponent
         let ext = src.pathExtension
-        let (name, usedN) = renderTemplate(nameTemplate, stem: stem, ext: ext, dir: dir)
+        let (name, usedN) = renderTemplate(nameTemplate, stem: stem, ext: ext, dir: dir, today: now)
         let dest = dir.appendingPathComponent(name)
         if dest.path == src.path { return } // name unchanged, nothing to do
         if fm.fileExists(atPath: dest.path), !usedN {
@@ -299,14 +301,16 @@ public enum FileOps {
 
         guard s.contains("{n}") else { return (s, false) }
         let fm = FileManager.default
-        var n = 1
-        while true {
+        // Bounded so a pathological folder cannot spin here. If every number in
+        // range is taken, hand back the last try with usedN false: the caller's
+        // collision guard then fails closed instead of moving onto a taken name.
+        for n in 1...100_000 {
             let candidate = s.replacingOccurrences(of: "{n}", with: String(n))
             if !fm.fileExists(atPath: dir.appendingPathComponent(candidate).path) {
                 return (candidate, true)
             }
-            n += 1
         }
+        return (s.replacingOccurrences(of: "{n}", with: "100000"), false)
     }
 }
 

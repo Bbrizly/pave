@@ -265,7 +265,7 @@ final class FileStepTests: XCTestCase {
         defer { try? fm.removeItem(at: dir) }
         write("scan001.pdf", in: dir, mtime: fixedToday)
         try FileOps.runRename(
-            FileMatcher(folder: dir.path, ext: "pdf"), nameTemplate: "invoice-{date}.{ext}")
+            FileMatcher(folder: dir.path, ext: "pdf"), nameTemplate: "invoice-{date}.{ext}", now: fixedToday)
         XCTAssertTrue(fm.fileExists(atPath: dir.appendingPathComponent("invoice-2026-07-10.pdf").path))
         XCTAssertFalse(fm.fileExists(atPath: dir.appendingPathComponent("scan001.pdf").path))
     }
